@@ -2,9 +2,12 @@ package path_helpers
 
 import (
 	"os"
+	"fmt"
 	"path"
 	"strings"
 	"go/build"
+	"path/filepath"
+	"github.com/phayes/permbits"
 	"github.com/mitchellh/go-homedir"
 )
 
@@ -80,4 +83,50 @@ func IsExistingRegularFile(pth string) bool {
 		return fi.Mode().IsRegular()
 	}
 	return false
+}
+
+func ResolvPerms(pth string) (perms permbits.PermissionBits, err error) {
+	var (
+		perms2 permbits.PermissionBits
+		err2 error
+	)
+
+	pth, err = filepath.Abs(pth)
+	if err != nil {
+		return
+	}
+
+	for {
+		perms2, err2 = permbits.Stat(pth)
+		if err2 == nil {
+			return perms2, nil
+		} else if os.IsNotExist(err2) {
+			pth = filepath.Dir(pth)
+		} else {
+			return perms, fmt.Errorf("Fail to get stat of %q: %v", pth, err2)
+		}
+	}
+}
+
+func ResolvFilePerms(pth string) (perms permbits.PermissionBits, err error) {
+	if IsExistingRegularFile(pth) {
+		return permbits.Stat(pth)
+	}
+
+	pth, err = filepath.Abs(pth)
+
+	if err != nil {
+		return
+	}
+
+	p, err2 := ResolvPerms(filepath.Dir(pth))
+
+	if err2 != nil {
+		return perms, err2
+	}
+	// default file don't have execution perms
+	p.SetGroupExecute(false)
+	p.SetUserExecute(false)
+	p.SetOtherExecute(false)
+	return p, nil
 }
