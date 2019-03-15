@@ -1,13 +1,13 @@
 package path_helpers
 
 import (
-	"runtime"
 	"errors"
-	"strings"
 	"path/filepath"
+	"runtime"
+	"strings"
 )
 
-func GetCalledFileNameSkip(skip int, abs ... bool) string {
+func GetCalledFileNameSkip(skip int, abs ...bool) (pth string) {
 	_, filename, _, ok := runtime.Caller(skip)
 	if !ok {
 		panic(errors.New("Information unavailable."))
@@ -19,12 +19,12 @@ func GetCalledFileNameSkip(skip int, abs ... bool) string {
 				break
 			}
 		}
-		return filename[1:]
+		return TrimGoPathC(filename[1:], "src")
 	}
 	return filename
 }
 
-func GetCalledFileName(abs ... bool) string {
+func GetCalledFileName(abs ...bool) string {
 	return GetCalledFileNameSkip(2, abs...)
 }
 

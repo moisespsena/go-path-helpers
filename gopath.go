@@ -1,18 +1,24 @@
 package path_helpers
 
 import (
-	"os"
 	"fmt"
-	"path"
-	"strings"
 	"go/build"
+	"os"
+	"path"
 	"path/filepath"
-	"github.com/phayes/permbits"
+	"strings"
+
+	"github.com/moisespsena/go-error-wrap"
+
 	"github.com/mitchellh/go-homedir"
+	"github.com/phayes/permbits"
 )
 
-var GOPATH string
-var GOPATHS []string
+var (
+	GOPATHC string
+	GOPATH  string
+	GOPATHS []string
+)
 
 func init() {
 	var (
@@ -60,7 +66,8 @@ func ResolveGoPath(pth string) (gopath string) {
 	return ""
 }
 
-func ResolveGoSrcPath(pth string) string {
+func ResolveGoSrcPath(p ...string) string {
+	pth := path.Join(p...)
 	pth = path.Join("src", pth)
 	for _, gopath := range GOPATHS {
 		gpth := path.Join(gopath, pth)
@@ -78,6 +85,41 @@ func IsExistingDir(pth string) bool {
 	return false
 }
 
+func IsExistingDirE(pth string) (ok bool, err error) {
+	if fi, err := os.Stat(pth); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	} else if !fi.IsDir() {
+		err = fmt.Errorf("%q is not directory", pth)
+	} else {
+		ok = true
+	}
+	return
+}
+
+func MkdirAll(pth string) error {
+	perms, err := ResolvePerms(pth)
+	if err != nil {
+		return err
+	}
+	return os.MkdirAll(pth, os.FileMode(perms))
+}
+
+func MkdirAllIfNotExists(pth string) error {
+	if exists, err := IsExistingDirE(pth); err != nil {
+		return err
+	} else if exists {
+		return nil
+	}
+	perms, err := ResolvePerms(pth)
+	if err != nil {
+		return err
+	}
+	return os.MkdirAll(pth, os.FileMode(perms))
+}
+
 func IsExistingRegularFile(pth string) bool {
 	if fi, err := os.Stat(pth); err == nil {
 		return fi.Mode().IsRegular()
@@ -85,10 +127,20 @@ func IsExistingRegularFile(pth string) bool {
 	return false
 }
 
-func ResolvPerms(pth string) (perms permbits.PermissionBits, err error) {
+func ResolveMode(pth string) (mode os.FileMode, err error) {
+	var perms permbits.PermissionBits
+	if perms, err = ResolvePerms(pth); err != nil {
+		err = errwrap.Wrap(err, "Resolver permissions of %q", pth)
+		return
+	}
+	mode = os.FileMode(perms)
+	return
+}
+
+func ResolvePerms(pth string) (perms permbits.PermissionBits, err error) {
 	var (
 		perms2 permbits.PermissionBits
-		err2 error
+		err2   error
 	)
 
 	pth, err = filepath.Abs(pth)
@@ -108,7 +160,17 @@ func ResolvPerms(pth string) (perms permbits.PermissionBits, err error) {
 	}
 }
 
-func ResolvFilePerms(pth string) (perms permbits.PermissionBits, err error) {
+func ResolveFileMode(pth string) (mode os.FileMode, err error) {
+	var perms permbits.PermissionBits
+	if perms, err = ResolveFilePerms(pth); err != nil {
+		err = errwrap.Wrap(err, "Resolver permissions of %q", pth)
+		return
+	}
+	mode = os.FileMode(perms)
+	return
+}
+
+func ResolveFilePerms(pth string) (perms permbits.PermissionBits, err error) {
 	if IsExistingRegularFile(pth) {
 		return permbits.Stat(pth)
 	}
@@ -119,7 +181,7 @@ func ResolvFilePerms(pth string) (perms permbits.PermissionBits, err error) {
 		return
 	}
 
-	p, err2 := ResolvPerms(filepath.Dir(pth))
+	p, err2 := ResolvePerms(filepath.Dir(pth))
 
 	if err2 != nil {
 		return perms, err2
@@ -129,4 +191,13 @@ func ResolvFilePerms(pth string) (perms permbits.PermissionBits, err error) {
 	p.SetUserExecute(false)
 	p.SetOtherExecute(false)
 	return p, nil
+}
+
+func TrimGoPathC(pth string, sub ...string) string {
+	if GOPATHC != "" {
+		gopathc := filepath.Join(append([]string{GOPATHC}, sub...)...)
+		return strings.TrimPrefix(strings.Trim(pth, string(filepath.Separator)),
+			strings.TrimPrefix(gopathc, string(filepath.Separator))+string(filepath.Separator))
+	}
+	return pth
 }
