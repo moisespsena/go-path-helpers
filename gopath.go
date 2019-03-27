@@ -27,12 +27,20 @@ func init() {
 		ok  bool
 	)
 
-	paths := make(map[string]int)
+	paths := make(map[string]interface{})
+
+	if _, err := os.Stat("vendor"); err == nil {
+		if abs, err := filepath.Abs("vendor"); err == nil {
+			paths[abs] = nil
+			GOPATHS = append(GOPATHS, abs)
+		}
+	}
 
 	for _, pth = range strings.Split(os.Getenv("GOPATH"), ":") {
 		if pth != "" {
 			if _, ok = paths[pth]; !ok {
 				GOPATHS = append(GOPATHS, pth)
+				paths[pth] = nil
 			}
 		}
 	}
@@ -44,6 +52,7 @@ func init() {
 
 	if _, err = os.Stat(pth); err == nil {
 		if _, ok = paths[pth]; !ok {
+			paths[pth] = nil
 			GOPATHS = append(GOPATHS, pth)
 		}
 	}
@@ -51,6 +60,7 @@ func init() {
 	pth = build.Default.GOPATH
 	if _, ok = paths[pth]; !ok {
 		GOPATHS = append(GOPATHS, pth)
+		paths[pth] = nil
 	}
 
 	GOPATH = GOPATHS[0]
@@ -67,8 +77,7 @@ func ResolveGoPath(pth string) (gopath string) {
 }
 
 func ResolveGoSrcPath(p ...string) string {
-	pth := path.Join(p...)
-	pth = path.Join("src", pth)
+	pth := path.Join("src", path.Join(p...))
 	for _, gopath := range GOPATHS {
 		gpth := path.Join(gopath, pth)
 		if _, err := os.Stat(gpth); err == nil {

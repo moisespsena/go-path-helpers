@@ -2,6 +2,7 @@ package path_helpers
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -15,11 +16,16 @@ func GetCalledFileNameSkip(skip int, abs ...bool) (pth string) {
 	if len(abs) == 0 || !abs[0] {
 		for _, gp := range GOPATHS {
 			if strings.HasPrefix(filename, gp) {
-				filename = strings.TrimPrefix(filename, filepath.Join(gp, "src"))
-				break
+				return strings.TrimPrefix(
+					strings.TrimPrefix(filename, gp)[1:],
+					"src"+string(os.PathSeparator),
+				)
 			}
 		}
-		return TrimGoPathC(filename[1:], "src")
+		if filename[0] == os.PathSeparator {
+			filename = filename[1:]
+		}
+		return TrimGoPathC(filename, "src")
 	}
 	return filename
 }
